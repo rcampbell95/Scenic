@@ -58,7 +58,7 @@ finishedFlag = ast.Attribute(
 
 trackedNames = {"ego", "workspace"}
 globalParametersName = "globalParameters"
-builtinNames = {globalParametersName}
+builtinNames = {globalParametersName, "str", "int", "float"}
 
 
 # shorthands for convenience
@@ -236,6 +236,16 @@ TEMPORAL_PREFIX_OPS = {
 }
 
 
+class AtomicCheckTransformer(Transformer):
+    def visit_Call(self, node: ast.Call):
+        func = node.func
+        if isinstance(func, ast.Name) and func.id in TEMPORAL_PREFIX_OPS:
+            self.makeSyntaxError(
+                f'malformed use of the "{func.id}" temporal operator', node
+            )
+        return self.generic_visit(node)
+
+
 class PropositionTransformer(Transformer):
     def __init__(self, filename="<unknown>") -> None:
         super().__init__(filename)
@@ -259,6 +269,11 @@ class PropositionTransformer(Transformer):
             return wrapped, self.nextSyntaxId
         newNode = self._create_atomic_proposition_factory(node)
         return newNode, self.nextSyntaxId
+
+    def generic_visit(self, node):
+        acv = AtomicCheckTransformer(self.filename)
+        acv.visit(node)
+        return node
 
     def _register_requirement_syntax(self, syntax):
         """register requirement syntax for later use
@@ -357,14 +372,6 @@ class PropositionTransformer(Transformer):
             keywords=[],
         )
         return ast.copy_location(newNode, node)
-
-    def visit_Call(self, node: ast.Call):
-        func = node.func
-        if isinstance(func, ast.Name) and func.id in TEMPORAL_PREFIX_OPS:
-            self.makeSyntaxError(
-                f'malformed use of the "{func.id}" temporal operator', node
-            )
-        return self.generic_visit(node)
 
     def visit_Always(self, node: s.Always):
         value = self.visit(node.value)
@@ -540,7 +547,11 @@ class ScenicToPythonTransformer(Transformer):
         if node.id in builtinNames:
             if not isinstance(node.ctx, ast.Load):
                 raise self.makeSyntaxError(f'unexpected keyword "{node.id}"', node)
-            node = ast.copy_location(ast.Call(ast.Name(node.id, loadCtx), [], []), node)
+            # Convert global parameters name to a call
+            if node.id == globalParametersName:
+                node = ast.copy_location(
+                    ast.Call(ast.Name(node.id, loadCtx), [], []), node
+                )
         elif node.id in trackedNames:
             if not isinstance(node.ctx, ast.Load):
                 raise self.makeSyntaxError(
@@ -1078,6 +1089,16 @@ class ScenicToPythonTransformer(Transformer):
                 newArgs.append(self.visit(arg))
         newKeywords = [self.visit(kwarg) for kwarg in node.keywords]
         newFunc = self.visit(node.func)
+
+        # Convert primitive type conversions to their Scenic equivalents
+        if isinstance(newFunc, ast.Name):
+            if newFunc.id == "str":
+                newFunc.id = "_toStrScenic"
+            elif newFunc.id == "float":
+                newFunc.id = "_toFloatScenic"
+            elif newFunc.id == "int":
+                newFunc.id = "_toIntScenic"
+
         if wrappedStar:
             newNode = ast.Call(
                 ast.Name("callWithStarArgs", ast.Load()),
