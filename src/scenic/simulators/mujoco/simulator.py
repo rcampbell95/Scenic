@@ -1,14 +1,14 @@
+import time
+import math
+
 import mujoco
 import mujoco.viewer
 from scenic.core.simulators import Simulation, Simulator 
-import mujoco.viewer
-import time
-from scipy.spatial.transform import Rotation
+from scipy.spatial.transform._rotation import Rotation
 from scenic.core.type_support import toOrientation
 
-import math
-
 from scenic.core.vectors import Vector
+from scenic.core.shapes import BoxShape, SpheroidShape, MeshShape, CylinderShape
 
 class MujocoSimulator(Simulator):
   def __init__(self, xml='', actual = False):
@@ -30,12 +30,16 @@ class MujocoSimulation(Simulation):
     self.scene=scene
     
     self.mujocohandle=None
-    kwargs.pop('timestep')
+
+    if "timestep" in kwargs:
+      kwargs.pop('timestep')
+
     super().__init__(scene, timestep=.001, **kwargs)
 
 
   def setup(self):
     super().setup()
+
     if self.xml != "":
       self.model = mujoco.MjModel.from_xml_string(self.xml)
       self.data = mujoco.MjData(self.model)
@@ -57,15 +61,14 @@ class MujocoSimulation(Simulation):
         </asset>
         <worldbody>
           <light pos="0 1 1" dir="0 -1 -1" diffuse="1 1 1"/>
-          <geom condim="3" material="MatPlane" name="ground" pos="0 0 0" size="1 1 0.1" type="plane"/>"""
-      x=1
-      for obj in self.objects:
+          <geom condim="3" material="MatPlane" name="ground" pos="0 0 0" size="5 5 0.1" type="plane"/>"""
+
+      for x, obj in enumerate(self.objects):
         object_string+=f"""<body name="{x}" pos="{obj.position[0]} {obj.position[1]} {obj.position[2]}">
         <joint name="{x}\_joint" type="free" damping="0.001"/>
-        <geom name="{x}\_geom" quat="{obj.orientation.q[3]} {obj.orientation.q[0]} {obj.orientation.q[1]} {obj.orientation.q[2]}" size="{obj.width} {obj.length} {obj.height}" rgba="{obj.color[0]} {obj.color[1]} {obj.color[2]} {obj.color[3]}" type = "box" density="100"/>
+        <geom name="{x}\_geom" quat="{obj.orientation.q[3]} {obj.orientation.q[0]} {obj.orientation.q[1]} {obj.orientation.q[2]}" size="{obj.width} {obj.length} {obj.height}" rgba="{obj.color[0]} {obj.color[1]} {obj.color[2]} {obj.color[3]}" type = "{self._scenicToMujoco(obj.shape, "object.shape")}" density="100"/>
         </body>
          """
-        x=x+1
       self.xml+=object_string
       self.xml+= """
         </worldbody>
@@ -76,6 +79,12 @@ class MujocoSimulation(Simulation):
       self.data = mujoco.MjData(self.model)
       
     self.mujocohandle = mujoco.viewer.launch_passive(self.model, self.data)
+
+  def _scenicToMujoco(self, property, property_name):
+
+    if property_name == "object.shape":
+      body_geom_shape_map = {BoxShape: "box", SpheroidShape: "sphere", MeshShape: "mesh", CylinderShape: "cylinder"}
+      return body_geom_shape_map[type(property)]
 
   def createObjectInSimulator(self, obj):
     if self.mujocohandle == None: pass 
@@ -90,11 +99,8 @@ class MujocoSimulation(Simulation):
       time.sleep(self.timestep)
     
   def getProperties(self, obj, properties):
-    j=1
-    
-    for checker in self.scene.objects:
+    for j, checker in enumerate(self.scene.objects):
       if checker == obj:
-        # get postion
         x,y,z=self.data.geom(f'''{j}\_geom''').xpos
         position=Vector(x,y,z)
 
@@ -113,9 +119,8 @@ class MujocoSimulation(Simulation):
         new_mat = [[a,b,c],[d,e,f,],[g,h,i]]
         r = Rotation.from_matrix(new_mat)
         # ori = toOrientation(r)
-        yaw, pitch, roll = obj.parentOrientation.localAnglesFor(r)
+        yaw, pitch, roll = obj.yaw, obj.pitch, obj.roll #obj.parentOrientation.localAnglesFor(r)
         break
-      j=j+1
     values = dict(
       position=position,
       velocity=velocity,
