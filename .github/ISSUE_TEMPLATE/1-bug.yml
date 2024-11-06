@@ -32,11 +32,16 @@ body:
     attributes:
       label: Detailed Description
       description: |
-        Please provide a clear and concise description of what the bug is and paste the error log below. Please rerun your simulation error with the **`-b`** parameter for a full stack trace.
-        It helps improving readability if the error log is wrapped in ```triple quotes blocks```.
-      placeholder: |
-        A clear and concise description of what the bug is. You can rerun your Scenic simulation with `-b` to get a full stack trace.
+        Please provide a clear and concise description of what the bug is and paste the error log below.
 
+        1. Clear and concise description of the bug
+        2. `scenic` command you ran locally (e.g. `scenic test.scenic --count 1 -b`, etc.). Please rerun your simulation error with the **`-b`** parameter for a full stack trace.
+        3. Error log. It helps improving readability if the error log is wrapped in ```triple quotes blocks```.
+
+      placeholder: |
+        1. Scenic has a bug
+        2. `scenic test.scenic -b`
+        3. Error Log
         ```
         # error full stack trace
         ```
@@ -49,6 +54,8 @@ body:
       description: |
         Please provide a minimal example to help us reproduce the bug. Code should be wrapped with ```triple quotes blocks``` to improve readability. 
         If it is not possible to reproduce the bug with a short self-contained Scenic or Python file, for example if a specific mesh is required, you can attach any required files below or include a link to them.
+
+        If possible/applicable, please specify a seed that will reproduce the issue by running scenic with the seed argument: `scenic -s SEED, --seed SEED  random seed`
       placeholder: |
         1. First step to reproduce bug
         2. Second step, etc
@@ -65,5 +72,5 @@ body:
       options:
         - label: I am reporting an issue, not asking a question
           required: true
-        - label: I checked the open issues, forum, etc. and have not found any solution
+        - label: I checked the open and closed issues, forum, etc. and have not found any solution
         - label: I have provided all necessary code, etc. to reproduce the issue
