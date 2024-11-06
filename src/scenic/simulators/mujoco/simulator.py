@@ -1,14 +1,18 @@
-import time
 import math
+import time
+import copy
 
 import mujoco
 import mujoco.viewer
+from dm_control import mjcf
+import numpy as np
 from scenic.core.simulators import Simulation, Simulator 
 from scipy.spatial.transform._rotation import Rotation
 from scenic.core.type_support import toOrientation
 
 from scenic.core.vectors import Vector
 from scenic.core.shapes import BoxShape, SpheroidShape, MeshShape, CylinderShape
+
 
 class MujocoSimulator(Simulator):
   def __init__(self, xml='', actual = False):
@@ -44,40 +48,85 @@ class MujocoSimulation(Simulation):
       self.model = mujoco.MjModel.from_xml_string(self.xml)
       self.data = mujoco.MjData(self.model)
     else:
-      object_string=''
-      self.xml = f"""
-      <mujoco>
-        <compiler angle="radian" coordinate="local" inertiafromgeom="true"/>
-        <default>
-          <joint armature="0" damping="1" limited="false"/>
-          <geom friction="0.5" solimp="0.99 0.99 0.01" solref="0.01 0.5"/>
-        </default>
-        <option gravity="0 0 -9.8" timestep="{self.timestep}"/>
-        <asset>
-          <texture type="skybox" builtin="gradient" rgb1="1 1 1" rgb2=".6 .8 1" width="256" height="256"/>
-          <texture name="texplane" type="2d" builtin="checker" rgb1=".2 .3 .4" rgb2=".1 0.15 0.2" width="512" height="512"/>
-          <material name="MatPlane" texture="texplane" texrepeat="1 1" texuniform="true"/>
+      mjcf_model = mjcf.RootElement(model="model")
 
-        </asset>
-        <worldbody>
-          <light pos="0 1 1" dir="0 -1 -1" diffuse="1 1 1"/>
-          <geom condim="3" material="MatPlane" name="ground" pos="0 0 0" size="5 5 0.1" type="plane"/>"""
+      mjcf_model.compiler.set_attributes(angle = "radian",
+                                        coordinate = "local",
+                                        inertiafromgeom = "true")
 
-      for x, obj in enumerate(self.objects):
-        object_string+=f"""<body name="{x}" pos="{obj.position[0]} {obj.position[1]} {obj.position[2]}">
-        <joint name="{x}\_joint" type="free" damping="0.001"/>
-        <geom name="{x}\_geom" quat="{obj.orientation.q[3]} {obj.orientation.q[0]} {obj.orientation.q[1]} {obj.orientation.q[2]}" size="{obj.width} {obj.length} {obj.height}" rgba="{obj.color[0]} {obj.color[1]} {obj.color[2]} {obj.color[3]}" type = "{self._scenicToMujoco(obj.shape, "object.shape")}" density="100"/>
-        </body>
-         """
-      self.xml+=object_string
-      self.xml+= """
-        </worldbody>
-      </mujoco>
-      """
+      mjcf_model.default.joint.set_attributes(armature = 0,
+                                            damping = 1,
+                                            limited = "false")
+
+      mjcf_model.default.geom.set_attributes(friction = [0.5],
+                                            solimp = [0.99, 0.99, 0.01],
+                                            solref = [0.01, 0.5])
+
+      mjcf_model.option.set_attributes(gravity=[0, 0, -9.8],
+                                      timestep=self.timestep)
+
+      mjcf_model.asset.add("texture",
+                          type="skybox",
+                          builtin="gradient",
+                          rgb1=[1, 1, 1],
+                          rgb2=[.6, .8, 1],
+                          width=256,
+                          height=256)
+
+      mjcf_model.asset.add("texture",
+                          name="texplane",
+                          type="2d",
+                          builtin="checker",
+                          rgb1=[.2, .3, .4],
+                          rgb2=[.1, .15, 2],
+                          width=512,
+                          height=512)
+
+      mjcf_model.asset.add("material",
+                          name="MatPlane",
+                          texture="texplane",
+                          texrepeat=[1, 1],
+                          texuniform="true")
+
+      mjcf_model.worldbody.add("light",
+                              pos=[0, 1, 1],
+                              dir=[0, -1, -1],
+                              diffuse=[1, 1, 1])
+
+      mjcf_model.worldbody.add("geom",
+                              condim=3,
+                              material="MatPlane",
+                              name="ground",
+                              pos=[0, 0, 0],
+                              size=[1, 1, 0.1],
+                              type="plane")
+
+
+      for i, obj in enumerate(self.objects):
+        mjcf_model.worldbody.add("body",
+                                name=f"{i}\_body",
+                                pos=[obj.position[0], obj.position[1], obj.position[2]])
+
+        mjcf_model.worldbody.body[i].add("joint",
+                                        name=f"{i}\_joint",
+                                        type="free",
+                                        damping=0.001)
+
+        quaternion = copy.copy(obj.orientation.q)
+        shifted_quaternion = np.roll(quaternion, 1)
+        mjcf_model.worldbody.body[i].add("geom",
+                                        name=f"{i}\_geom",
+                                        quat=shifted_quaternion,
+                                        size=[obj.width, obj.length, obj.height],
+                                        rgba=obj.color,
+                                        type=self._scenicToMujoco(obj.shape, "object.shape"),
+                                        density=100)
+
+      self.xml = mjcf_model.to_xml_string()
 
       self.model = mujoco.MjModel.from_xml_string(self.xml)
       self.data = mujoco.MjData(self.model)
-      
+   
     self.mujocohandle = mujoco.viewer.launch_passive(self.model, self.data)
 
   def _scenicToMujoco(self, property, property_name):
