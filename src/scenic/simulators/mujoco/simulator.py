@@ -1,7 +1,7 @@
 import math
 import time
 import copy
-import types
+import os
 
 import mujoco
 import mujoco.viewer
@@ -27,7 +27,7 @@ class MujocoSimulator(Simulator):
 
 class MujocoSimulation(Simulation):
   '''
-  `Simulation` object for Mujoco.
+  `Simulation object for Mujoco.
   '''
 
   def __init__(self, scene, xml='', actual = False, use_default_arena=True, **kwargs):
@@ -132,7 +132,8 @@ class MujocoSimulation(Simulation):
                                           density=100)
 
       self.mjcf_model = mjcf_model
-      self.xml = mjcf_model.to_xml_string()
+      
+      self.xml = mjcf_model.to_xml_string(filename_with_hash=False)
 
       self.model = mujoco.MjModel.from_xml_string(self.xml)
       self.data = mujoco.MjData(self.model)
@@ -153,7 +154,8 @@ class MujocoSimulation(Simulation):
 
   def step(self):
     for i, obj in enumerate(self.objects):
-      obj.control(self.model, self.data)
+      if hasattr(obj, "control"):
+        obj.control(self.model, self.data)
     
     mujoco.mj_step(self.model, self.data)
     self.mujocohandle.sync()
@@ -161,30 +163,28 @@ class MujocoSimulation(Simulation):
       time.sleep(self.timestep)
 
   def getProperties(self, obj, properties):
-    for j, checker in enumerate(self.scene.objects):
-      if checker == obj:
-        body_name = obj.body_name
+    body_name = obj.body_name
 
-        x,y,z=self.data.body(body_name).xpos
-        position=Vector(x,y,z)
+    x,y,z=self.data.body(body_name).subtree_com
+    position=Vector(x,y,z)
 
-        # get angular velocity and speed
-        a,b,c=self.data.body(body_name).cvel[3:6]
-        angularVelocity = Vector(a,b,c)
-        angularSpeed = math.hypot(*angularVelocity)
+    # get angular velocity and speed
+    a,b,c=self.data.body(body_name).cvel[3:6]
+    angularVelocity = Vector(a,b,c)
+    angularSpeed = math.hypot(*angularVelocity)
 
-        # get velocity and speed
-        a,b,c=self.data.body(body_name).cvel[0:3]
-        velocity=Vector(a,b,c)
-        speed = math.hypot(*velocity)
+    # get velocity and speed
+    a,b,c=self.data.body(body_name).cvel[0:3]
+    velocity=Vector(a,b,c)
+    speed = math.hypot(*velocity)
 
-        cart_orientation=self.data.body(body_name).xmat 
-        a,b,c,d,e,f,g,h,i=cart_orientation
-        new_mat = [[a,b,c],[d,e,f,],[g,h,i]]
-        r = Rotation.from_matrix(new_mat)
-        # ori = toOrientation(r)
-        yaw, pitch, roll = obj.yaw, obj.pitch, obj.roll #obj.parentOrientation.localAnglesFor(r)
-        break
+    cart_orientation=self.data.body(body_name).ximat 
+    a,b,c,d,e,f,g,h,i=cart_orientation
+    new_mat = [[a,b,c],[d,e,f,],[g,h,i]]
+    r = Rotation.from_matrix(new_mat)
+    # ori = toOrientation(r)
+    yaw, pitch, roll = obj.yaw, obj.pitch, obj.roll #obj.parentOrientation.localAnglesFor(r)
+
     values = dict(
       position=position,
       velocity=velocity,
