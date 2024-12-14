@@ -7,7 +7,7 @@ if __name__ == "__main__":
 
     for sample_index in range(SAMPLES):
         simulator = MujocoSimulator(xml="")
-        scenario = scenic.scenarioFromFile("./examples/mujoco/simple_navigation.scenic")
+        scenario = scenic.scenarioFromFile("./examples/mujoco/simple.scenic")
 
         scene, _ = scenario.generate()
         simulation = simulator.simulate(scene, maxSteps=100000)

@@ -24,13 +24,8 @@ class MujocoBody(Object):
             except ValueError as e:
                 print(xml)
             self.body_name = self.mjcf_model.model + "/"
-
-            actuator = self.mjcf_model.actuator
         else:
-            self.mjcf_model = None
-
-        # Process model, keep list of bodies and actuators
-    
+            self.mjcf_model = None    
     def model(self):
         return self.mjcf_model
 
